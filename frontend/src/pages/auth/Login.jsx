@@ -1,88 +1,268 @@
-import { useAuth } from "../../context/AuthContext";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+
 import InputField from "../../components/forms/InputField";
-
-
-function Login() {
-
-
-  const { login } = useAuth();
-
-  const navigate = useNavigate();
+import { loginUser } from "../../services/authService";
+import { useAuth } from "../../context/AuthContext";
 
 
 
-  function handleLogin(e){
-
-    e.preventDefault();
+function Login(){
 
 
-    login({
-      name:"John Student",
-      email:"student@test.com",
-      role:"student"
-    });
+const navigate = useNavigate();
 
 
-    navigate("/dashboard");
-
-  }
+const { login } = useAuth();
 
 
 
-  return (
+const [form,setForm] = useState({
 
-    <section className="min-h-[80vh] flex items-center justify-center">
+ email:"",
+ password:""
 
-      <div className="bg-white shadow-lg rounded-xl p-8 w-full max-w-md">
-
-
-        <h1 className="text-3xl font-bold text-center mb-6">
-          Login
-        </h1>
+});
 
 
-        <form onSubmit={handleLogin}>
+
+const [error,setError] = useState("");
+
+const [loading,setLoading] = useState(false);
 
 
-          <InputField
-            label="Email"
-            type="email"
-            placeholder="Enter your email"
-          />
 
 
-          <InputField
-            label="Password"
-            type="password"
-            placeholder="Enter your password"
-          />
+function handleChange(e){
 
 
-          <button
-            className="
-            w-full
-            bg-blue-600
-            text-white
-            py-3
-            rounded-lg
-            mt-4
-            "
-          >
+setForm({
 
-            Login
+ ...form,
 
-          </button>
+ [e.target.name]:e.target.value
+
+});
 
 
-        </form>
+}
 
 
-      </div>
 
-    </section>
 
-  );
+
+async function handleSubmit(e){
+
+
+e.preventDefault();
+
+
+setError("");
+
+setLoading(true);
+
+
+
+try{
+
+
+const response = await loginUser(form);
+
+
+
+console.log(
+ "Login success",
+ response
+);
+
+
+
+login(response);
+
+
+
+if(response.user.role === "student"){
+
+ navigate("/dashboard");
+
+}
+
+
+else if(response.user.role === "client"){
+
+ navigate("/client-dashboard");
+
+}
+
+
+
+}
+
+
+catch(err){
+
+
+setError(
+ err.message
+);
+
+
+}
+
+
+finally{
+
+
+setLoading(false);
+
+
+}
+
+
+
+}
+
+
+
+
+return (
+
+
+<section className="
+min-h-[80vh]
+flex
+items-center
+justify-center
+">
+
+
+<div className="
+bg-white
+shadow-lg
+rounded-xl
+p-8
+w-full
+max-w-md
+">
+
+
+<h1 className="
+text-3xl
+font-bold
+text-center
+mb-6
+">
+
+Login
+
+</h1>
+
+
+
+<form onSubmit={handleSubmit}>
+
+
+<InputField
+
+label="Email"
+
+name="email"
+
+type="email"
+
+value={form.email}
+
+onChange={handleChange}
+
+placeholder="Enter email"
+
+/>
+
+
+
+<InputField
+
+label="Password"
+
+name="password"
+
+type="password"
+
+value={form.password}
+
+onChange={handleChange}
+
+placeholder="Enter password"
+
+/>
+
+
+
+
+{
+error && (
+
+<p className="
+text-red-500
+text-sm
+mb-4
+">
+
+{error}
+
+</p>
+
+)
+
+}
+
+
+
+
+<button
+
+disabled={loading}
+
+className="
+w-full
+bg-blue-600
+hover:bg-blue-700
+text-white
+py-3
+rounded-lg
+"
+
+>
+
+
+{
+
+loading
+?
+"Logging in..."
+:
+"Login"
+
+}
+
+
+</button>
+
+
+
+</form>
+
+
+
+</div>
+
+
+</section>
+
+
+);
+
+
 }
 
 

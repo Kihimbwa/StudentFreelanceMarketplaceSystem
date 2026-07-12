@@ -1,75 +1,191 @@
+import { useEffect, useState } from "react";
 import JobCard from "../../components/ui/JobCard";
+import { getJobs } from "../../services/jobService";
 
 
-function Jobs() {
+
+function Jobs(){
 
 
-  const jobs = [
-    {
-      id:1,
-      title:"Build React Website",
-      category:"Web Development",
-      budget:150,
-      description:
-      "Need a student developer to create a modern website."
-    },
+const [jobs,setJobs] = useState([]);
 
-    {
-      id:2,
-      title:"Design Social Media Posters",
-      category:"Graphic Design",
-      budget:50,
-      description:
-      "Create creative posters for a small business."
-    },
+const [loading,setLoading] = useState(true);
+
+const [error,setError] = useState("");
 
 
-    {
-      id:3,
-      title:"Database Project Help",
-      category:"Database",
-      budget:100,
-      description:
-      "Need assistance designing database systems."
-    }
-  ];
 
 
-  return (
 
-    <section className="max-w-7xl mx-auto px-6 py-10">
-
-
-      <h1 className="text-4xl font-bold mb-8">
-        Available Projects
-      </h1>
+useEffect(()=>{
 
 
-      <div className="grid md:grid-cols-3 gap-6">
+async function loadJobs(){
 
 
-        {
-          jobs.map((job)=>(
-
-            <JobCard
-              key={job.id}
-              title={job.title}
-              category={job.category}
-              budget={job.budget}
-              description={job.description}
-            />
-
-          ))
-        }
+try{
 
 
-      </div>
+const data = await getJobs();
 
 
-    </section>
+setJobs(data);
 
-  );
+
+
 }
+
+catch(err){
+
+
+setError(
+err.message
+);
+
+
+}
+
+finally{
+
+
+setLoading(false);
+
+
+}
+
+
+
+}
+
+
+
+loadJobs();
+
+
+
+},[]);
+
+
+
+
+
+
+
+if(loading){
+
+
+return (
+
+<div className="text-center py-10">
+
+<h1 className="text-xl">
+Loading jobs...
+</h1>
+
+</div>
+
+);
+
+
+}
+
+
+
+
+
+
+if(error){
+
+
+return (
+
+<div className="text-center py-10 text-red-500">
+
+{error}
+
+</div>
+
+);
+
+
+}
+
+
+
+
+
+
+return (
+
+<section className="
+max-w-7xl
+mx-auto
+px-6
+py-10
+">
+
+
+<h1 className="
+text-4xl
+font-bold
+mb-8
+">
+
+Available Projects
+
+</h1>
+
+
+
+
+<div className="
+grid
+md:grid-cols-3
+gap-6
+">
+
+
+
+{
+
+jobs.map((job)=>(
+
+
+<JobCard
+
+key={job.id}
+
+id={job.id}
+
+title={job.title}
+
+category={job.category}
+
+budget={job.budget}
+
+description={job.description}
+
+/>
+
+
+))
+
+
+}
+
+
+
+</div>
+
+
+</section>
+
+
+);
+
+
+}
+
 
 
 export default Jobs;

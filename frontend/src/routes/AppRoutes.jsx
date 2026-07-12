@@ -7,7 +7,12 @@ import Jobs from "../pages/jobs/Jobs";
 import StudentDashboard from "../pages/dashboard/StudentDashboard";
 import ClientDashboard from "../pages/dashboard/ClientDashboard";
 import ProtectedRoute from "./ProtectedRoute";
-
+import CreateJob from "../pages/jobs/CreateJob";
+import JobDetails from "../pages/jobs/JobDetails";
+import MyApplications from "../pages/applications/MyApplications";
+import JobApplicants from "../pages/applications/JobApplicants";
+import StudentProfile from "../pages/profile/StudentProfile";
+import ClientProfile from "../pages/profile/ClientProfile";
 
 function AppRoutes() {
   return (
@@ -40,6 +45,55 @@ function AppRoutes() {
       <ClientDashboard />
     </ProtectedRoute>
   }
+/>
+
+<Route 
+path="/create-job" 
+element={<CreateJob />} 
+/>
+
+<Route
+
+path="/jobs/:id"
+
+element={<JobDetails/>}
+
+/>
+
+<Route
+
+path="/my-applications"
+
+element={<MyApplications/>}
+
+/>
+
+
+
+<Route
+
+path="/job/:id/applicants"
+
+element={<JobApplicants/>}
+
+/>
+
+<Route
+
+path="/student-profile"
+
+element={<StudentProfile/>}
+
+/>
+
+
+
+<Route
+
+path="/client-profile"
+
+element={<ClientProfile/>}
+
 />
 
         </Route>
