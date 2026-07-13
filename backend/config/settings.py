@@ -27,7 +27,7 @@ SECRET_KEY = config('SECRET_KEY')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = config('DEBUG', default=True, cast=bool)
 
-ALLOWED_HOSTS = ["127.0.0.1", "localhost"]
+ALLOWED_HOSTS = ["127.0.0.1", "localhost", "*"]
 
 
 # Application definition
@@ -45,19 +45,18 @@ INSTALLED_APPS = [
     'corsheaders',
     'drf_yasg',
     
-# Apps zako za mradi
-    'accounts',       # <--- HAPA: Hakikisha herufi zote ni ndogo na kuna mkato mwishoni
+    # Apps zako za mradi
+    'accounts',       
     'jobs',
     'applications',
     'messaging',
     'reviews',
-
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
-    'corsheaders.middleware.CorsMiddleware',
+    'corsheaders.middleware.CorsMiddleware', # Ipo sehemu sahihi (Juu ya Common)
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -93,7 +92,7 @@ DATABASES = {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': 'freelance_accounts',
         'USER': 'postgres',
-        'PASSWORD': '1234',  # Weka password yako ya postgres hapa
+        'PASSWORD': '1234',  
         'HOST': '127.0.0.1',
         'PORT': '5432',
     },
@@ -138,6 +137,7 @@ DATABASES = {
         'PORT': '5432',
     }
 }
+
 # Ambia Django itumie router yetu
 DATABASE_ROUTERS = ['config.routers.MicroserviceDatabaseRouter']
 
@@ -177,10 +177,10 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 
-# CORS
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",
-]
+# --- REKEBISHO LIPO HAPA ---
+# CORS CONFIGURATION
+CORS_ALLOW_ALL_ORIGINS = True  # Inaruhusu port na IP zote za frontend (Bolt.new/Vite) kuunganisha bila kuzuiliwa
+CORS_ALLOW_CREDENTIALS = True
 
 # Django REST Framework
 REST_FRAMEWORK = {
