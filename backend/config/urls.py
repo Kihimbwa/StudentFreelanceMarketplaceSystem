@@ -21,7 +21,12 @@ from django.urls import path, include
 urlpatterns = [
     path('admin/', admin.site.urls),
     
-    # Njia za API
-    path('api/', include('jobs.urls')), 
-    path('api/', include('messaging.urls')), # ONA HII LINE TUMEIONGEZA HAPA
+    # Njia za API za Mfumo
+    path('api/', include('jobs.urls')),
+    path('api/', include('messaging.urls')),
+    path('api/reviews/', include('reviews.urls')),
+    
+    # HIZI HAPA TUMEZIONGEZA SASA HIVI
+    path('api/auth/', include('accounts.urls')),        # Kwa ajili ya Login, Register na Profile
+    path('api/applications/', include('applications.urls')), # Kwa ajili ya kuomba kazi (bids)
 ]
