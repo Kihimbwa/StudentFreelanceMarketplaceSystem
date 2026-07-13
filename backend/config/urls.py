@@ -21,6 +21,7 @@ from django.urls import path, include
 urlpatterns = [
     path('admin/', admin.site.urls),
     
-    # Njia ya API ya jobs (Inajumuisha urls zilizopo ndani ya jobs/urls.py)
+    # Njia za API
     path('api/', include('jobs.urls')), 
+    path('api/', include('messaging.urls')), # ONA HII LINE TUMEIONGEZA HAPA
 ]
