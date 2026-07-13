@@ -9,5 +9,5 @@ class JobViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
 
     def perform_create(self, serializer):
-        # Inachukua mtumiaji aliyepiga API kwa sasa na kumfanya ndio Client wa hii kazi
-        serializer.save(client=self.request.user)
+        # Tumebadilisha client= kuwa client_id=
+        serializer.save(client_id=self.request.user.id)

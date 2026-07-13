@@ -91,14 +91,55 @@ WSGI_APPLICATION = 'config.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': config('DB_NAME'),
-        'USER': config('DB_USER'),
-        'PASSWORD': config('DB_PASSWORD'),
-        'HOST': config('DB_HOST'),
-        'PORT': config('DB_PORT'),
+        'NAME': 'freelance_accounts',
+        'USER': 'postgres',
+        'PASSWORD': '1234',  # Weka password yako ya postgres hapa
+        'HOST': '127.0.0.1',
+        'PORT': '5432',
+    },
+    'accounts_db': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'freelance_accounts',
+        'USER': 'postgres',
+        'PASSWORD': '1234',
+        'HOST': '127.0.0.1',
+        'PORT': '5432',
+    },
+    'jobs_db': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'freelance_jobs',
+        'USER': 'postgres',
+        'PASSWORD': '1234',
+        'HOST': '127.0.0.1',
+        'PORT': '5432',
+    },
+    'applications_db': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'freelance_applications',
+        'USER': 'postgres',
+        'PASSWORD': '1234',
+        'HOST': '127.0.0.1',
+        'PORT': '5432',
+    },
+    'messaging_db': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'freelance_messaging',
+        'USER': 'postgres',
+        'PASSWORD': '1234',
+        'HOST': '127.0.0.1',
+        'PORT': '5432',
+    },
+    'reviews_db': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'freelance_reviews',
+        'USER': 'postgres',
+        'PASSWORD': '1234',
+        'HOST': '127.0.0.1',
+        'PORT': '5432',
     }
 }
-
+# Ambia Django itumie router yetu
+DATABASE_ROUTERS = ['config.routers.MicroserviceDatabaseRouter']
 
 # Password validation
 # https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators

@@ -19,15 +19,8 @@ from django.contrib import admin
 from django.urls import path, include
 
 urlpatterns = [
-    # Mstari sahihi wa admin panel
     path('admin/', admin.site.urls),
     
-    # Mstari unaounganisha accounts app
-    path('api/accounts/', include('accounts.urls')),
-
-    # Mstari unaounganisha jobs app
-    path('api/', include('jobs.urls')),
-
-    # Mstari unaounganisha applications app
-    path('api/', include('applications.urls')),
+    # Njia ya API ya jobs (Inajumuisha urls zilizopo ndani ya jobs/urls.py)
+    path('api/', include('jobs.urls')), 
 ]

@@ -1,10 +1,8 @@
 from django.db import models
-from django.contrib.auth import get_user_model
-
-User = get_user_model()
 
 class Job(models.Model):
-    client = models.ForeignKey(User, on_delete=models.CASCADE, related_name='jobs')
+    # Badala ya ForeignKey, tunahifadhi tu ID ya mteja kama namba ya kawaida
+    client_id = models.IntegerField(help_text="ID ya mteja kutoka accounts service")
     title = models.CharField(max_length=255)
     description = models.TextField()
     budget = models.DecimalField(max_digits=10, decimal_places=2)
