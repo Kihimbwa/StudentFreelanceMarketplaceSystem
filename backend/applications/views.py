@@ -9,4 +9,5 @@ class ApplicationViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         # Mwanafunzi aliyelogin ndiye anayewekwa kiotomatiki kama muombaji
-        serializer.save(freelancer=self.request.user)
+        # Tunachukua .id ya mtumiaji na kuihifadhi kwenye freelancer_id
+        serializer.save(freelancer_id=self.request.user.id)
