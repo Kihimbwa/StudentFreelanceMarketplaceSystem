@@ -1,246 +1,289 @@
-import { useEffect, useState, useMemo, useRef } from "react";
-import { Send, MessageSquare, Search } from "lucide-react";
-import { Message } from "../../types";
-import { messageService } from "../../services/endpoints";
-import { useAuth } from "../../context/AuthContext";
-import { useToast } from "../../context/ToastContext";
-import { timeAgo, formatDateTime, getErrorMessage } from "../../utils/helpers";
-import Avatar from "../../components/ui/Avatar";
-import Button from "../../components/ui/Button";
-import Spinner from "../../components/ui/Spinner";
-import EmptyState from "../../components/ui/EmptyState";
-import Input from "../../components/ui/Input";
+import React, { useState, useEffect, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
+import { Send, User, Search, MessageSquare } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
+import axios from 'axios';
 
-// Helper function iliyosogezwa juu ili iwe safi na rahisi kutumia
-function getConversationPartners(messages: Message[], userId?: number): number[] {
-  if (!userId) return [];
-  const partnerSet = new Set<number>();
-  messages.forEach((m) => {
-    if (m.sender === userId) partnerSet.add(m.receiver);
-    else if (m.receiver === userId) partnerSet.add(m.sender);
-  });
-  return Array.from(partnerSet);
+interface Conversation {
+  id: string;
+  name: string;
+  role: string;
+  lastMessage: string;
+  time: string;
+  unread: number;
+}
+
+interface Message {
+  id: number;
+  sender_id: number;
+  receiver_id: number;
+  content: string;
+  created_at: string;
 }
 
 export default function MessagesPage() {
-  const { user } = useAuth();
-  const toast = useToast();
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [activeUser, setActiveUser] = useState<number | null>(null);
-  const [content, setContent] = useState("");
-  const [sending, setSending] = useState(false);
-  const [search, setSearch] = useState("");
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const { user: currentUser } = useAuth();
+  const location = useLocation();
+  const chatMessagesEndRef = useRef<HTMLDivElement>(null);
 
-  const fetchMessages = async () => {
-    setLoading(true);
-    try {
-      const data = await messageService.getAll();
-      const validMessages = Array.isArray(data) ? data : [];
-      setMessages(validMessages);
-      
-      const partners = getConversationPartners(validMessages, user?.id);
-      if (partners.length > 0 && activeUser === null) {
-        setActiveUser(partners[0]);
-      }
-    } catch (err) {
-      toast.error(getErrorMessage(err, "Failed to load messages"));
-    } finally {
-      setLoading(false);
-    }
+  // Kamata data zilizotumwa kutoka kwenye ukurasa wa maombi ya kazi
+  const stateData = location.state as { startChatWith?: string | number; username?: string } | null;
+  const targetUserId = stateData?.startChatWith ? String(stateData.startChatWith) : null;
+  const targetUserName = stateData?.username || null;
+
+  const [activeChat, setActiveChat] = useState<string | null>(null);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [newMessage, setNewMessage] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  // Kazi ya kupata Token sahihi kutoka kwenye LocalStorage (sfm_access_token)
+  const getAuthHeader = () => {
+    const token = localStorage.getItem('sfm_access_token');
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  };
+
+  // Auto-scroll kwenda meseji ya mwisho chini kabisa
+  const scrollToBottom = () => {
+    chatMessagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
   useEffect(() => {
-    fetchMessages();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    scrollToBottom();
+  }, [messages]);
 
+  // 1. Chukua Inbox / Conversations kutoka Django (localhost:8000)
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, activeUser]); // Imeongezwa activeUser hapa ili scroll ifanye kazi ukibadili chat
+    const fetchConversations = async () => {
+      try {
+        const response = await axios.get('http://localhost:8000/api/messages/conversations/', {
+          headers: getAuthHeader()
+        });
+        
+        let fetchedConversations = response.data;
 
-  const conversationPartners = useMemo(
-    () => getConversationPartners(messages, user?.id),
-    [messages, user]
+        // Kama tumetoka kubonyeza "Contact Client" na hayupo kwenye orodha ya chat za nyuma
+        if (targetUserId && targetUserName) {
+          const exists = fetchedConversations.some((c: Conversation) => String(c.id) === String(targetUserId));
+          if (!exists) {
+            const tempChat: Conversation = {
+              id: String(targetUserId),
+              name: targetUserName,
+              role: 'Client',
+              lastMessage: 'Anza kuandika ujumbe...',
+              time: 'Sasa hivi',
+              unread: 0
+            };
+            fetchedConversations = [tempChat, ...fetchedConversations];
+          }
+          setActiveChat(String(targetUserId));
+        }
+        
+        setConversations(fetchedConversations);
+      } catch (error) {
+        console.error("Shida ya kupata mazungumzo (Hakikisha umelogin na token ipo):", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchConversations();
+  }, [targetUserId, targetUserName]);
+
+  // 2. Kuchukua meseji za mtu aliyebonyezwa (Active Chat kutoka localhost:8000)
+  useEffect(() => {
+    if (!activeChat) return;
+
+    const fetchMessages = async () => {
+      try {
+        const response = await axios.get(`http://localhost:8000/api/messages/?partner_id=${activeChat}`, {
+          headers: getAuthHeader()
+        });
+        setMessages(response.data);
+      } catch (error) {
+        console.error("Meseji zimeshindwa kupatikana:", error);
+      }
+    };
+
+    fetchMessages();
+    
+    // Polling ya sekunde 4 ili kupokea ujumbe mpya kiotomatiki
+    const interval = setInterval(fetchMessages, 4000);
+    return () => clearInterval(interval);
+  }, [activeChat]);
+
+  // 3. Kutuma Ujumbe Mpya kwenda Django (localhost:8000)
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newMessage.trim() || !activeChat) return;
+
+    try {
+      const response = await axios.post('http://localhost:8000/api/messages/', {
+        receiver_id: parseInt(activeChat),
+        content: newMessage
+      }, {
+        headers: getAuthHeader()
+      });
+
+      setMessages((prev) => [...prev, response.data]);
+      setNewMessage('');
+
+      // Update ujumbe wa mwisho upande wa kushoto wa screen
+      setConversations((prev) =>
+        prev.map((c) =>
+          String(c.id) === String(activeChat)
+            ? { ...c, lastMessage: newMessage, time: 'Sasa hivi' }
+            : c
+        )
+      );
+    } catch (error) {
+      console.error("Meseji haijatumwa:", error);
+    }
+  };
+
+  const filteredConversations = conversations.filter((c) =>
+    c.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const filteredPartners = useMemo(() => {
-    if (!search) return conversationPartners;
-    return conversationPartners.filter((p) => 
-      `User ${p}`.toLowerCase().includes(search.toLowerCase())
-    );
-  }, [conversationPartners, search]);
-
-  // Tunatengeneza Map ya ujumbe wa mwisho kwa kila partner mara moja tu, badala ya kufanya filter/sort ndani ya loop ya render
-  const lastMessagesMap = useMemo(() => {
-    const map: Record<number, Message> = {};
-    if (!user?.id) return map;
-
-    // Kwanza tunapanga ujumbe kwa kupitia mwanzo hadi mwisho ili ujumbe wa mwisho u-overwrite ule wa kwanza
-    const sorted = [...messages].sort(
-      (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-    );
-
-    sorted.forEach((m) => {
-      const partnerId = m.sender === user.id ? m.receiver : m.sender;
-      map[partnerId] = m;
-    });
-
-    return map;
-  }, [messages, user]);
-
-  const activeMessages = useMemo(() => {
-    if (!activeUser || !user) return [];
-    return messages
-      .filter((m) =>
-        (m.sender === user.id && m.receiver === activeUser) ||
-        (m.sender === activeUser && m.receiver === user.id)
-      )
-      .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-  }, [messages, activeUser, user]);
-
-  const handleSend = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!activeUser || !content.trim()) return;
-    setSending(true);
-    try {
-      const newMsg = await messageService.create({
-        receiver: activeUser,
-        content: content.trim(),
-      });
-      setMessages((prev) => [...prev, newMsg]);
-      setContent("");
-    } catch (err) {
-      toast.error(getErrorMessage(err, "Failed to send message"));
-    } finally {
-      setSending(false);
-    }
-  };
-
   if (loading) {
-    return <Spinner size="lg" className="py-20" />;
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-600"></div>
+      </div>
+    );
   }
 
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-slate-900 mb-2">Messages</h1>
-        <p className="text-slate-500">Chat with clients and students directly.</p>
-      </div>
-
-      {conversationPartners.length === 0 ? (
-        <EmptyState
-          title="No conversations yet"
-          message="Start a conversation by messaging someone from a job page."
-          icon={<MessageSquare className="w-8 h-8" />}
-        />
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden h-[600px]">
-          {/* Sidebar - Conversation List */}
-          <div className="md:col-span-1 border-r border-slate-200 flex flex-col">
-            <div className="p-3 border-b border-slate-100">
-              <Input
-                icon={<Search className="w-4 h-4" />}
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden h-[calc(100vh-200px)] min-h-[500px] flex">
+        
+        {/* SIDEBAR: ORODHA YA MAZUNGUMZO */}
+        <div className="w-1/3 border-r border-slate-200 flex flex-col h-full bg-slate-50/50">
+          <div className="p-4 border-b border-slate-200 bg-white">
+            <h1 className="text-xl font-bold text-slate-900 mb-3">Messages</h1>
+            <div className="relative">
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+              <input
+                type="text"
                 placeholder="Search conversations..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50"
               />
-            </div>
-            <div className="flex-1 overflow-y-auto">
-              {filteredPartners.map((partnerId) => {
-                const lastMsg = lastMessagesMap[partnerId];
-                return (
-                  <button
-                    key={partnerId}
-                    onClick={() => setActiveUser(partnerId)}
-                    className={`w-full flex items-center gap-3 p-3 text-left hover:bg-slate-50 transition-colors ${
-                      activeUser === partnerId ? "bg-sky-50" : ""
-                    }`}
-                  >
-                    <Avatar name={`User ${partnerId}`} size="md" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-slate-900">User #{partnerId}</p>
-                      <p className="text-xs text-slate-400 truncate">
-                        {lastMsg?.content || "No messages"}
-                      </p>
-                    </div>
-                    {lastMsg && (
-                      <span className="text-xs text-slate-400 flex-shrink-0">
-                        {timeAgo(lastMsg.timestamp)}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
             </div>
           </div>
 
-          {/* Chat Area */}
-          <div className="md:col-span-2 flex flex-col">
-            {activeUser ? (
-              <>
-                <div className="flex items-center gap-3 p-4 border-b border-slate-100">
-                  <Avatar name={`User ${activeUser}`} size="md" />
-                  <div>
-                    <p className="font-semibold text-slate-900">User #{activeUser}</p>
-                    <p className="text-xs text-slate-400">Active conversation</p>
-                  </div>
-                </div>
-
-                <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50">
-                  {activeMessages.length === 0 ? (
-                    <div className="text-center py-8 text-sm text-slate-400">
-                      No messages yet. Say hello!
-                    </div>
-                  ) : (
-                    activeMessages.map((msg) => {
-                      const isMine = msg.sender === user?.id;
-                      return (
-                        <div
-                          key={msg.id}
-                          className={`flex ${isMine ? "justify-end" : "justify-start"}`}
-                        >
-                          <div
-                            className={`max-w-[75%] rounded-2xl px-4 py-2.5 ${
-                              isMine
-                                ? "bg-slate-900 text-white"
-                                : "bg-white border border-slate-200 text-slate-700"
-                            }`}
-                          >
-                            <p className="text-sm leading-relaxed">{msg.content}</p>
-                            <p className="text-xs mt-1 text-slate-400 text-right">
-                              {formatDateTime(msg.timestamp)}
-                            </p>
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                  <div ref={messagesEndRef} />
-                </div>
-
-                <form onSubmit={handleSend} className="p-4 border-t border-slate-100 flex gap-2">
-                  <input
-                    type="text"
-                    value={content}
-                    onChange={(e) => setContent(e.target.value)}
-                    placeholder="Type a message..."
-                    className="flex-1 rounded-lg border border-slate-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300"
-                  />
-                  <Button type="submit" loading={sending} disabled={!content.trim()}>
-                    <Send className="w-4 h-4" />
-                  </Button>
-                </form>
-              </>
-            ) : (
-              <div className="flex-1 flex items-center justify-center text-slate-400">
-                <p>Select a conversation to start chatting</p>
+          <div className="flex-1 overflow-y-auto divide-y divide-slate-100">
+            {filteredConversations.length === 0 ? (
+              <div className="p-6 text-center text-slate-500 text-sm">
+                No active conversations
               </div>
+            ) : (
+              filteredConversations.map((chat) => (
+                <button
+                  key={chat.id}
+                  onClick={() => setActiveChat(String(chat.id))}
+                  className={`w-full p-4 flex items-start gap-3 transition-colors text-left ${
+                    activeChat === String(chat.id) ? 'bg-blue-50/70 border-l-4 border-blue-600' : 'hover:bg-slate-50 bg-white'
+                  }`}
+                >
+                  <div className="h-10 w-10 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center flex-shrink-0">
+                    <User className="h-5 w-5 text-slate-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex justify-between items-baseline mb-1">
+                      <h3 className="text-sm font-semibold text-slate-900 truncate">{chat.name}</h3>
+                      <span className="text-xs text-slate-400">{chat.time}</span>
+                    </div>
+                    <p className="text-xs text-slate-500 font-medium mb-1">{chat.role}</p>
+                    <p className="text-xs text-slate-400 truncate">{chat.lastMessage}</p>
+                  </div>
+                  {chat.unread > 0 && (
+                    <span className="bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full ml-2">
+                      {chat.unread}
+                    </span>
+                  )}
+                </button>
+              ))
             )}
           </div>
         </div>
-      )}
+
+        {/* CHAT WINDOW */}
+        <div className="flex-1 flex flex-col h-full bg-white">
+          {activeChat ? (
+            <>
+              {(() => {
+                const partner = conversations.find((c) => String(c.id) === String(activeChat));
+                return (
+                  <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-white">
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center">
+                        <User className="h-5 w-5 text-slate-500" />
+                      </div>
+                      <div>
+                        <h2 className="text-sm font-semibold text-slate-900">{partner?.name}</h2>
+                        <span className="text-xs text-emerald-600 font-medium">{partner?.role}</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50/30">
+                {messages.map((msg) => {
+                  const isMe = String(msg.sender_id) === String(currentUser?.id);
+                  return (
+                    <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+                      <div className={`max-w-[70%] rounded-2xl px-4 py-2.5 text-sm ${
+                        isMe ? 'bg-blue-600 text-white rounded-br-none' : 'bg-slate-100 text-slate-800 rounded-bl-none'
+                      }`}>
+                        <p>{msg.content}</p>
+                        <span className={`block text-[10px] mt-1 text-right ${
+                          isMe ? 'text-blue-200' : 'text-slate-400'
+                        }`}>
+                          {new Date(msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+                <div ref={chatMessagesEndRef} />
+              </div>
+
+              <form onSubmit={handleSendMessage} className="p-4 border-t border-slate-200 bg-white">
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Type your message..."
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    className="flex-1 px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <button
+                    type="submit"
+                    className="bg-blue-600 hover:bg-blue-700 text-white p-2.5 rounded-xl transition-colors flex items-center justify-center"
+                  >
+                    <Send className="h-5 w-5" />
+                  </button>
+                </div>
+              </form>
+            </>
+          ) : (
+            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
+              <div className="h-16 w-16 bg-blue-50 rounded-full flex items-center justify-center mb-4">
+                <MessageSquare className="h-8 w-8 text-blue-600" />
+              </div>
+              <h3 className="text-lg font-semibold text-slate-900 mb-1">Direct Messages</h3>
+              <p className="text-sm text-slate-500 max-w-sm">
+                Select a conversation from the left to start chatting, or start a conversation by messaging someone from a job page.
+              </p>
+            </div>
+          )}
+        </div>
+
+      </div>
     </div>
   );
 }
