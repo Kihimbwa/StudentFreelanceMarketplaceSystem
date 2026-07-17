@@ -178,13 +178,6 @@ export default function ClientDashboard() {
                   Post a Job
                 </Button>
               </Link>
-              <Link to="/jobs">
-                <Button variant="outline" fullWidth>
-                  <Briefcase className="w-4 h-4" />
-                  Browse Jobs
-                </Button>
-              </Link>
-              {/* Kitufe Kipya cha 'Total Applications' Kimeongezwa Hapa */}
               <Link to="/applications">
                 <Button variant="outline" fullWidth className="flex items-center justify-center gap-2">
                   <Users className="w-4 h-4" />

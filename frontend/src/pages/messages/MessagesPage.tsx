@@ -15,8 +15,7 @@ interface Conversation {
 
 interface Message {
   id: number;
-  sender_id: number;
-  receiver_id: number;
+  receiver_id: number | string;
   content: string;
   created_at: string;
 }
@@ -25,8 +24,8 @@ export default function MessagesPage() {
   const { user: currentUser } = useAuth();
   const location = useLocation();
   const chatMessagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-  // Kamata data zilizotumwa kutoka kwenye ukurasa wa maombi ya kazi
   const stateData = location.state as { startChatWith?: string | number; username?: string } | null;
   const targetUserId = stateData?.startChatWith ? String(stateData.startChatWith) : null;
   const targetUserName = stateData?.username || null;
@@ -38,22 +37,54 @@ export default function MessagesPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
 
-  // Kazi ya kupata Token sahihi kutoka kwenye LocalStorage (sfm_access_token)
   const getAuthHeader = () => {
     const token = localStorage.getItem('sfm_access_token');
     return token ? { Authorization: `Bearer ${token}` } : {};
   };
 
-  // Auto-scroll kwenda meseji ya mwisho chini kabisa
-  const scrollToBottom = () => {
-    chatMessagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  const scrollToBottom = (behavior: 'smooth' | 'auto' = 'smooth') => {
+    chatMessagesEndRef.current?.scrollIntoView({ behavior });
   };
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+  const isUserAtBottom = () => {
+    const container = scrollContainerRef.current;
+    if (!container) return true;
+    const threshold = 100; 
+    return (container.scrollHeight - container.scrollTop - container.clientHeight) < threshold;
+  };
 
-  // 1. Chukua Inbox / Conversations kutoka Django (localhost:8000)
+  // Function ya kuambia Backend kuwa meseji zimeshasomwa (Kama WhatsApp)
+  const markMessagesAsRead = async (partnerId: string) => {
+    try {
+      // Tunatuma request kwenda backend kusafisha unread za huyu partner
+      await axios.post(`http://localhost:8000/api/messages/mark_read/`, {
+        partner_id: parseInt(partnerId)
+      }, {
+        headers: getAuthHeader()
+      });
+
+      // Baada ya kuambia backend, tunasafisha pia huku kwenye frontend (UI) papo hapo
+      setConversations((prev) =>
+        prev.map((c) =>
+          String(c.id) === String(partnerId) ? { ...c, unread: 0 } : c
+        )
+      );
+    } catch (error) {
+      console.error("Imeshindwa ku-mark kama zimesomwa:", error);
+    }
+  };
+
+  // 1. Unapobadili chat, shusha chini na weka alama ya "Read" (Soma)
+  useEffect(() => {
+    if (activeChat) {
+      setTimeout(() => {
+        scrollToBottom('auto');
+      }, 50);
+      markMessagesAsRead(activeChat); // <--- Inasafisha namba ukiingia kwenye chat
+    }
+  }, [activeChat]);
+
+  // 2. Kupata conversations za pembeni
   useEffect(() => {
     const fetchConversations = async () => {
       try {
@@ -63,7 +94,6 @@ export default function MessagesPage() {
         
         let fetchedConversations = response.data;
 
-        // Kama tumetoka kubonyeza "Contact Client" na hayupo kwenye orodha ya chat za nyuma
         if (targetUserId && targetUserName) {
           const exists = fetchedConversations.some((c: Conversation) => String(c.id) === String(targetUserId));
           if (!exists) {
@@ -82,7 +112,7 @@ export default function MessagesPage() {
         
         setConversations(fetchedConversations);
       } catch (error) {
-        console.error("Shida ya kupata mazungumzo (Hakikisha umelogin na token ipo):", error);
+        console.error("Shida ya kupata mazungumzo:", error);
       } finally {
         setLoading(false);
       }
@@ -91,7 +121,7 @@ export default function MessagesPage() {
     fetchConversations();
   }, [targetUserId, targetUserName]);
 
-  // 2. Kuchukua meseji za mtu aliyebonyezwa (Active Chat kutoka localhost:8000)
+  // 3. Polling ya kila sekunde 4
   useEffect(() => {
     if (!activeChat) return;
 
@@ -100,7 +130,24 @@ export default function MessagesPage() {
         const response = await axios.get(`http://localhost:8000/api/messages/?partner_id=${activeChat}`, {
           headers: getAuthHeader()
         });
-        setMessages(response.data);
+        
+        const wasAtBottom = isUserAtBottom();
+
+        setMessages((prevMessages) => {
+          if (JSON.stringify(prevMessages) === JSON.stringify(response.data)) {
+            return prevMessages;
+          }
+          
+          if (wasAtBottom) {
+            setTimeout(() => scrollToBottom('smooth'), 50);
+          }
+          
+          // Kama kuna ujumbe mpya umeingia tukiwa bado ndani ya chat hii hii, weka kama umeshasomwa
+          markMessagesAsRead(activeChat); 
+
+          return response.data;
+        });
+
       } catch (error) {
         console.error("Meseji zimeshindwa kupatikana:", error);
       }
@@ -108,12 +155,11 @@ export default function MessagesPage() {
 
     fetchMessages();
     
-    // Polling ya sekunde 4 ili kupokea ujumbe mpya kiotomatiki
     const interval = setInterval(fetchMessages, 4000);
     return () => clearInterval(interval);
   }, [activeChat]);
 
-  // 3. Kutuma Ujumbe Mpya kwenda Django (localhost:8000)
+  // 4. Kutuma meseji mpya
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMessage.trim() || !activeChat) return;
@@ -129,11 +175,12 @@ export default function MessagesPage() {
       setMessages((prev) => [...prev, response.data]);
       setNewMessage('');
 
-      // Update ujumbe wa mwisho upande wa kushoto wa screen
+      setTimeout(() => scrollToBottom('smooth'), 50);
+
       setConversations((prev) =>
         prev.map((c) =>
           String(c.id) === String(activeChat)
-            ? { ...c, lastMessage: newMessage, time: 'Sasa hivi' }
+            ? { ...c, lastMessage: newMessage, time: 'Sasa hivi', unread: 0 }
             : c
         )
       );
@@ -158,7 +205,7 @@ export default function MessagesPage() {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden h-[calc(100vh-200px)] min-h-[500px] flex">
         
-        {/* SIDEBAR: ORODHA YA MAZUNGUMZO */}
+        {/* SIDEBAR */}
         <div className="w-1/3 border-r border-slate-200 flex flex-col h-full bg-slate-50/50">
           <div className="p-4 border-b border-slate-200 bg-white">
             <h1 className="text-xl font-bold text-slate-900 mb-3">Messages</h1>
@@ -211,36 +258,44 @@ export default function MessagesPage() {
         </div>
 
         {/* CHAT WINDOW */}
-        <div className="flex-1 flex flex-col h-full bg-white">
+        <div className="flex-1 flex flex-col h-full bg-slate-50/30">
           {activeChat ? (
             <>
               {(() => {
                 const partner = conversations.find((c) => String(c.id) === String(activeChat));
                 return (
-                  <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-white">
+                  <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-white shadow-sm">
                     <div className="flex items-center gap-3">
                       <div className="h-10 w-10 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center">
                         <User className="h-5 w-5 text-slate-500" />
                       </div>
                       <div>
                         <h2 className="text-sm font-semibold text-slate-900">{partner?.name}</h2>
-                        <span className="text-xs text-emerald-600 font-medium">{partner?.role}</span>
+                        <span className="text-xs text-emerald-600 font-medium capitalize">{partner?.role}</span>
                       </div>
                     </div>
                   </div>
                 );
               })()}
 
-              <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50/30">
+              {/* MESSAGE AREA */}
+              <div 
+                ref={scrollContainerRef}
+                className="flex-1 overflow-y-auto p-4 space-y-4"
+              >
                 {messages.map((msg) => {
-                  const isMe = String(msg.sender_id) === String(currentUser?.id);
+                  const currentUserId = String(currentUser?.id || '');
+                  const isMe = String(msg.receiver_id) !== currentUserId;
+
                   return (
-                    <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-                      <div className={`max-w-[70%] rounded-2xl px-4 py-2.5 text-sm ${
-                        isMe ? 'bg-blue-600 text-white rounded-br-none' : 'bg-slate-100 text-slate-800 rounded-bl-none'
+                    <div key={msg.id} className="w-full flex">
+                      <div className={`max-w-[70%] rounded-2xl px-4 py-2.5 text-sm shadow-sm relative ${
+                        isMe 
+                          ? 'bg-blue-600 text-white rounded-br-none ml-auto'  
+                          : 'bg-white border border-slate-200 text-slate-800 rounded-tl-none mr-auto' 
                       }`}>
-                        <p>{msg.content}</p>
-                        <span className={`block text-[10px] mt-1 text-right ${
+                        <p className="break-words leading-relaxed">{msg.content}</p>
+                        <span className={`block text-[10px] mt-1 text-right select-none ${
                           isMe ? 'text-blue-200' : 'text-slate-400'
                         }`}>
                           {new Date(msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
@@ -252,6 +307,7 @@ export default function MessagesPage() {
                 <div ref={chatMessagesEndRef} />
               </div>
 
+              {/* INPUT FORM */}
               <form onSubmit={handleSendMessage} className="p-4 border-t border-slate-200 bg-white">
                 <div className="flex gap-2">
                   <input
@@ -259,11 +315,11 @@ export default function MessagesPage() {
                     placeholder="Type your message..."
                     value={newMessage}
                     onChange={(e) => setNewMessage(e.target.value)}
-                    className="flex-1 px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="flex-1 px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50/50"
                   />
                   <button
                     type="submit"
-                    className="bg-blue-600 hover:bg-blue-700 text-white p-2.5 rounded-xl transition-colors flex items-center justify-center"
+                    className="bg-blue-600 hover:bg-blue-700 text-white p-2.5 rounded-xl transition-colors flex items-center justify-center shadow-md active:scale-95"
                   >
                     <Send className="h-5 w-5" />
                   </button>
@@ -271,7 +327,7 @@ export default function MessagesPage() {
               </form>
             </>
           ) : (
-            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
+            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-white">
               <div className="h-16 w-16 bg-blue-50 rounded-full flex items-center justify-center mb-4">
                 <MessageSquare className="h-8 w-8 text-blue-600" />
               </div>

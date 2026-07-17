@@ -1,4 +1,4 @@
-from rest_framework import viewsets, permissions
+from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.db.models import Q
@@ -32,7 +32,34 @@ class MessageViewSet(viewsets.ModelViewSet):
         # Tunapitisha sender_id kwa usalama wakati wa kusave
         serializer.save(sender_id=self.request.user.id)
 
-    # Njia mpya ya kuchukua Orodha ya Chats upande wa kushoto (Inbox)
+    # ACTION MPYA: Inaweka meseji zote ulizotumiwa na huyu partner kuwa "Zimesomwa" (is_read=True)
+    @action(detail=False, methods=['post'])
+    def mark_read(self, request):
+        user_id = request.user.id
+        partner_id = request.data.get('partner_id')
+
+        if not partner_id:
+            return Response(
+                {"error": "partner_id inahitajika kwenye payload"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Tafuta meseji zote alizokutumia huyu partner ambazo bado hujazisoma, kisha ziweke kuwa True
+        unread_messages = Message.objects.filter(
+            sender_id=partner_id,
+            receiver_id=user_id,
+            is_read=False
+        )
+        
+        count = unread_messages.count()
+        unread_messages.update(is_read=True)
+
+        return Response(
+            {"status": "success", "marked_count": count}, 
+            status=status.HTTP_200_OK
+        )
+
+    # Njia ya kuchukua Orodha ya Chats upande wa kushoto (Inbox)
     @action(detail=False, methods=['get'])
     def conversations(self, request):
         user_id = request.user.id
